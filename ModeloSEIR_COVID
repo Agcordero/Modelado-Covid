@@ -1,0 +1,106 @@
+%Implementación del modelo SIR
+
+y0m = [126148372;2586721;2041418];
+N = sum(y0m);
+lambda = y0m(2)/N;
+gamma = y0m(3)/N;
+
+SIR = @(t,y) [-lambda*y(1) ; lambda*y(1)-gamma*y(2) ; gamma*y(2)];
+
+t0 = 1;
+tf = 1000;
+h = 0.01;
+[t,y] = odeRK4(SIR,y0m,t0,tf,h);
+plot(t,y(1,:),'b','DisplayName','S')
+hold on
+plot(t,y(2,:),'r','DisplayName','I')
+plot(t,y(3,:),'g','DisplayName','R')
+
+legend();
+grid on
+hold off
+
+%Implementación del modelo SEIR
+
+MS = 2; %Multiplicador por sobreporte
+D_infect = 2.9; %Tiempo que es infeccioso el paciente
+D_incub = 5.2; %Tiempo de incubación (dias)
+p_grave = 0.1380; %Tasa de hospitalización
+D_RL = 14; %Tiempo de recuperación de casos leves (dias)
+D_hosp = 4; %Tiempo entre presencia de sintomas y hospitalizacion en casos graves (dias)
+p_ICU = 0.05; %Tasa de UCI
+D_RH = 12; %Tiempo entre hospitalizacion de casos graves no UCI y recuperacion (dias)
+p_M = 0.03; %Tasa de letalidad respecto a la población general
+D_ICU = 1; %Tiempo entre hospitalizacion  de casos graves e ingreso a UCI (días)
+D_RICU = 7; %Tiempo entre ingreso a UCI y recuperacion (dias)
+D_M = 8; %Tiempo entre ingreso a UCI y deceso (dias)
+N = 22; %Poblacion susceptible (millones)
+R0 = 2.83;
+
+f = @(t,y) [-(R0/D_infect)*y(3)*y(1);
+            (R0/D_infect)*y(3)*y(1) - (1/D_incub)*y(2);
+            (1/D_incub)*y(2) - (1/D_infect)*y(3);
+            (1-p_grave)*(1/D_infect)*y(3) - (1/D_RL)*y(4);
+            p_grave*(1/D_infect)*y(3) - (1/D_hosp)*y(5);
+            (1/D_hosp)*y(5) - (1-p_ICU)*(1/D_RH)*y(6) - p_ICU(1/D_ICU)*y(6);
+            p_ICU*(1/D_ICU)*y(6) - (1-p_M)*(1/D_RICU)*y(7) - p_M*(1/D_M)*y(7);
+            (1/D_RL)*y(4) + (1-p_ICU)*(1/D_RH)*y(6) + (1-p_M)*(1/D_RICU)*y(7);
+            p_M*(1/D_M)*y(7)];
+
+%PRECICCIÓN A PARTIR DE ESTE MES. VALORES AL DIA DE 11 DE JULIO
+        
+t0 = 1;
+tf = 100;
+%Valores iniciales de la pandemia para México
+y0m = [126148372;57356*15;2586721;2586721*0.818;2586721*0.182;2586721*0.182;0;2041418;234907];
+y0m = y0m/norm(y0m);
+h = 0.01;
+%Solución númerica
+[tm,ym] = odeRK4(f,y0m,t0,tf,h);
+%[tm,ym] = odeBS23(f,y0m,t0,tf,1e-9);
+plot(tm,ym(1,:),'b','DisplayName','S')
+hold on
+plot(tm,ym(2,:),'m','DisplayName','E')
+plot(tm,ym(3,:),'r','DisplayName','I')
+plot(tm,ym(8,:),'g','DisplayName','R')
+legend();
+grid on
+
+%Funciones
+
+function [t,y] = odeBS23(f,y0,t0,tf,TolRel)
+    h = (tf-t0)/100;
+    y(:,1) = y0;
+    t(1) = t0;
+    n = 1;
+    MAX = 5e6;
+    s4 = f(t(n),y(:,n));
+    
+    while t(n) <= tf && n <= MAX
+        s1 = s4;
+        s2 = f(t(n)+(h/2),y(:,n)+(h/2)*s1);
+        s3 = f(t(n)+(3/4)*h,y(:,n)+(3/4)*h*s2);
+        t(n+1) = t(n) + h;
+        y(:,n+1) = y(:,n) + (h/9)*(2*s1 + 3*s2 + 4*s3);
+        s4 = f(t(n+1),y(:,n+1));
+        e_nmas1 = (h/72)*(-5*s1 + 6*s2 + 8*s3 - 9*s4);
+        s = ((TolRel*h)/(2*norm(e_nmas1)))^(1/3);
+        h = s*h;
+        n = n+1;
+    end  
+end
+
+function [t,y] = odeRK4(f,y0,t0,tf,h)
+    t = t0:h:tf;
+    n = length(t);
+    y = zeros(length(y0),n);
+    y(:,1) = y0;
+    
+    for i = 1:n-1
+        k1 = f(t(i),y(:,i));
+        k2 = f(t(i)+0.5*h,y(:,i)+0.5*k1*h);
+        k3 = f(t(i)+0.5*h,y(:,i)+0.5*k2*h);
+        k4 = f(t(i)+h,y(:,i)+k3*h);
+        y(:,i+1) = y(:,i) + (h/6)*(k1 + 2*k2 + 2*k3 + k4);
+    end
+end
